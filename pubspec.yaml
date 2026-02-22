@@ -1,0 +1,26 @@
+name: pfa
+description: "Main connectée à actuation robotisée - LSF from text via Flutter (BLE/Wi-Fi)"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  flutter_blue_plus: ^1.32.0
+  path_provider: ^2.1.2
+  shared_preferences: ^2.2.2
+  csv: ^6.0.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/
