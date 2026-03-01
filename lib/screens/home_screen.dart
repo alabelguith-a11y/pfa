@@ -209,11 +209,14 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
 
-    // --- Step 2: Request BLE permissions (with "Open settings" if denied)
+    // --- Step 2: Request BLE + location permissions (with "Open settings" if denied)
     var scanStatus = await Permission.bluetoothScan.status;
     var connectStatus = await Permission.bluetoothConnect.status;
+    var locationStatus = await Permission.location.status;
 
-    if (scanStatus.isPermanentlyDenied || connectStatus.isPermanentlyDenied) {
+    if (scanStatus.isPermanentlyDenied ||
+        connectStatus.isPermanentlyDenied ||
+        locationStatus.isPermanentlyDenied) {
       if (mounted) Navigator.of(ctx).pop();
       if (!mounted) return;
       await _showPermissionSettingsDialog(ctx);
@@ -221,8 +224,9 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     if (!scanStatus.isGranted) scanStatus = await Permission.bluetoothScan.request();
     if (!connectStatus.isGranted) connectStatus = await Permission.bluetoothConnect.request();
+    if (!locationStatus.isGranted) locationStatus = await Permission.location.request();
 
-    if (!scanStatus.isGranted || !connectStatus.isGranted) {
+    if (!scanStatus.isGranted || !connectStatus.isGranted || !locationStatus.isGranted) {
       if (mounted) Navigator.of(ctx).pop();
       if (!mounted) return;
       await _showPermissionSettingsDialog(ctx);
