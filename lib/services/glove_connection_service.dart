@@ -42,7 +42,8 @@ class GloveConnectionService {
 
   Future<void> connectBle(BluetoothDevice device) async {
     try {
-      await device.connect();
+      // Connection timeout (Android GATT can fail with 133 if device is busy or out of range)
+      await device.connect(timeout: const Duration(seconds: 15));
       List<BluetoothService> services = await device.discoverServices();
       for (BluetoothService s in services) {
         if (s.uuid.toString().toLowerCase().contains('gesture')) {
@@ -65,6 +66,13 @@ class GloveConnectionService {
           }
           if (_gestureChar != null) break;
         }
+      }
+      if (_gestureChar == null) {
+        await device.disconnect();
+        throw Exception(
+          'Aucune caractéristique d\'écriture trouvée. '
+          'Vérifiez que le profil GATT du gant expose un service avec une caractéristique writable.',
+        );
       }
       _bleDevice = device;
       _mode = ConnectionMode.ble;

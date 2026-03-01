@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../models/gesture_data.dart';
 import '../services/gesture_loader_service.dart';
 import '../services/glove_connection_service.dart';
@@ -183,6 +184,170 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  /// Runs the full BLE flow: permissions, scan, device picker, connect.
+  Future<void> _startBleConnection(BuildContext sheetContext) async {
+    Navigator.pop(sheetContext);
+    final ctx = context;
+
+    // --- Step 1: Show progress so user sees something immediately
+    if (!mounted) return;
+    showDialog(
+      context: ctx,
+      barrierDismissible: false,
+      builder: (c) => const AlertDialog(
+        content: Row(
+          children: [
+            SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            SizedBox(width: 20),
+            Expanded(child: Text('Demande d\'autorisation Bluetooth…')),
+          ],
+        ),
+      ),
+    );
+
+    // --- Step 2: Request BLE permissions (with "Open settings" if denied)
+    var scanStatus = await Permission.bluetoothScan.status;
+    var connectStatus = await Permission.bluetoothConnect.status;
+
+    if (scanStatus.isPermanentlyDenied || connectStatus.isPermanentlyDenied) {
+      if (mounted) Navigator.of(ctx).pop();
+      if (!mounted) return;
+      await _showPermissionSettingsDialog(ctx);
+      return;
+    }
+    if (!scanStatus.isGranted) scanStatus = await Permission.bluetoothScan.request();
+    if (!connectStatus.isGranted) connectStatus = await Permission.bluetoothConnect.request();
+
+    if (!scanStatus.isGranted || !connectStatus.isGranted) {
+      if (mounted) Navigator.of(ctx).pop();
+      if (!mounted) return;
+      await _showPermissionSettingsDialog(ctx);
+      return;
+    }
+
+    // --- Step 3: Update dialog to "Scanning"
+    if (!mounted) return;
+    Navigator.of(ctx).pop();
+    showDialog(
+      context: ctx,
+      barrierDismissible: false,
+      builder: (c) => const AlertDialog(
+        content: Row(
+          children: [
+            SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            SizedBox(width: 20),
+            Expanded(child: Text('Recherche d\'appareils BLE…')),
+          ],
+        ),
+      ),
+    );
+
+    await FlutterBluePlus.startScan(timeout: const Duration(seconds: 10)).catchError((_) {});
+    await Future.delayed(const Duration(seconds: 6));
+    final results = FlutterBluePlus.lastScanResults;
+    await FlutterBluePlus.stopScan();
+
+    if (!mounted) return;
+    Navigator.of(ctx).pop(); // close "Scanning" dialog
+
+    if (results.isEmpty) {
+      ScaffoldMessenger.of(ctx).showSnackBar(
+        const SnackBar(
+          content: Text('Aucun appareil trouvé. Déconnectez le gant de nRF Connect, assurez-vous que le Bluetooth est activé, puis réessayez.'),
+          duration: Duration(seconds: 5),
+        ),
+      );
+      return;
+    }
+
+    final chosen = await showModalBottomSheet<BluetoothDevice>(
+      context: ctx,
+      builder: (c) => ListView(
+        shrinkWrap: true,
+        children: results.map((r) => ListTile(
+          title: Text(r.device.platformName.isNotEmpty ? r.device.platformName : r.device.remoteId.toString()),
+          subtitle: Text(r.device.remoteId.toString()),
+          onTap: () => Navigator.pop(c, r.device),
+        )).toList(),
+      ),
+    );
+
+    if (chosen == null) return;
+
+    if (!mounted) return;
+    showDialog(
+      context: ctx,
+      barrierDismissible: false,
+      builder: (c) => const AlertDialog(
+        content: Row(
+          children: [
+            SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            SizedBox(width: 20),
+            Expanded(child: Text('Connexion au gant…')),
+          ],
+        ),
+      ),
+    );
+
+    try {
+      await _glove.connectBle(chosen);
+      if (!mounted) return;
+      Navigator.of(ctx).pop();
+      ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('Connecté (BLE)')));
+      setState(() {});
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(ctx).pop();
+        ScaffoldMessenger.of(ctx).showSnackBar(
+          SnackBar(
+            content: Text('Erreur: $e'),
+            duration: const Duration(seconds: 5),
+          ),
+        );
+        setState(() {});
+      }
+    }
+  }
+
+  Future<void> _showPermissionSettingsDialog(BuildContext context) async {
+    final openSettings = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Autorisation Bluetooth requise'),
+        content: const Text(
+          'Pour détecter et connecter le gant, l\'application a besoin des autorisations '
+          '« Bluetooth – scanner » et « Bluetooth – se connecter ». '
+          'Activez-les dans les paramètres de l\'application.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c, false),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(c, true),
+            child: const Text('Ouvrir les paramètres'),
+          ),
+        ],
+      ),
+    );
+    if (openSettings == true) {
+      await openAppSettings();
+    }
+  }
+
   void _showConnectionSheet(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -199,42 +364,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 leading: const Icon(Icons.bluetooth),
                 title: const Text('Bluetooth (BLE)'),
                 subtitle: const Text('Profil GATT GestureCtrl'),
-                onTap: () async {
-                  Navigator.pop(ctx);
-                  if (FlutterBluePlus.adapterStateNow != BluetoothAdapterState.on) {
-                    if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Activez le Bluetooth')));
-                    return;
-                  }
-                  await FlutterBluePlus.startScan(timeout: const Duration(seconds: 8))
-                      .catchError((_) {});
-                  await Future.delayed(const Duration(seconds: 5));
-                  final results = FlutterBluePlus.lastScanResults;
-                  await FlutterBluePlus.stopScan();
-                  if (results.isEmpty && mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Aucun appareil trouvé')));
-                    return;
-                  }
-                  final chosen = await showModalBottomSheet<BluetoothDevice>(
-                    context: context,
-                    builder: (c) => ListView(
-                      shrinkWrap: true,
-                      children: results.map((r) => ListTile(
-                        title: Text(r.device.platformName.isNotEmpty ? r.device.platformName : r.device.remoteId.toString()),
-                        subtitle: Text(r.device.remoteId.toString()),
-                        onTap: () => Navigator.pop(c, r.device),
-                      )).toList(),
-                    ),
-                  );
-                  if (chosen != null) {
-                    try {
-                      await _glove.connectBle(chosen);
-                      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Connecté (BLE)')));
-                      setState(() {});
-                    } catch (e) {
-                      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erreur: $e')));
-                    }
-                  }
-                },
+                onTap: () => _startBleConnection(ctx),
               ),
               ListTile(
                 leading: const Icon(Icons.wifi),

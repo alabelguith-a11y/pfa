@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'screens/home_screen.dart';
-import 'screens/calibration_screen.dart';
-import 'screens/history_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -35,52 +33,7 @@ class AdevaGloveApp extends StatelessWidget {
           elevation: 0,
         ),
       ),
-      home: const MainShell(),
-    );
-  }
-}
-
-class MainShell extends StatefulWidget {
-  const MainShell({super.key});
-
-  @override
-  State<MainShell> createState() => _MainShellState();
-}
-
-class _MainShellState extends State<MainShell> {
-  int _index = 0;
-
-  static const List<Widget> _screens = [
-    HomeScreen(),
-    CalibrationScreen(),
-    HistoryScreen(),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: IndexedStack(
-        index: _index,
-        children: _screens,
-      ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _index,
-        onDestinationSelected: (i) => setState(() => _index = i),
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.text_fields),
-            label: 'Commande',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.tune),
-            label: 'Calibration',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.history),
-            label: 'Historique',
-          ),
-        ],
-      ),
+      home: const HomeScreen(),
     );
   }
 }
