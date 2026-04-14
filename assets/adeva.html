@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ADEVA — 3D Hand Visualiser</title>
+    <link rel="stylesheet" href="style.css">
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+</head>
+<body>
+
+<header>
+  <div class="logo">ADEVA <span>/ GLOVE VISUALISER</span></div>
+  <div class="status-pill">
+    <div class="status-dot"></div>
+    <span id="status-text">SIMULATED</span>
+  </div>
+</header>
+
+<div class="main">
+  <div id="canvas-wrap">
+    <div class="loading-overlay" id="overlay">
+      <div class="loader-ring"></div>
+      <div class="loading-text">LOADING HAND MODEL…</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-scroll">
+
+      <div class="panel-section">
+        <div class="panel-label">Gesture — Alphabet</div>
+        <div class="gesture-grid" id="alpha-grid"></div>
+      </div>
+
+      <div class="panel-section">
+        <div class="panel-label">Finger angles</div>
+        <div class="finger-list" id="finger-list">
+          <div class="finger-row">
+            <div class="finger-name">Thumb</div>
+            <div class="finger-track"><div class="finger-fill" id="bar-0" style="width:0%"></div></div>
+            <div class="finger-val" id="val-0">0°</div>
+          </div>
+          <div class="finger-row">
+            <div class="finger-name">Index</div>
+            <div class="finger-track"><div class="finger-fill" id="bar-1" style="width:0%"></div></div>
+            <div class="finger-val" id="val-1">0°</div>
+          </div>
+          <div class="finger-row">
+            <div class="finger-name">Middle</div>
+            <div class="finger-track"><div class="finger-fill" id="bar-2" style="width:0%"></div></div>
+            <div class="finger-val" id="val-2">0°</div>
+          </div>
+          <div class="finger-row">
+            <div class="finger-name">Ring</div>
+            <div class="finger-track"><div class="finger-fill" id="bar-3" style="width:0%"></div></div>
+            <div class="finger-val" id="val-3">0°</div>
+          </div>
+          <div class="finger-row">
+            <div class="finger-name">Pinky</div>
+            <div class="finger-track"><div class="finger-fill" id="bar-4" style="width:0%"></div></div>
+            <div class="finger-val" id="val-4">0°</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel-section">
+        <div class="panel-label">Words</div>
+        <div class="word-grid" id="word-grid"></div>
+      </div>
+
+      <div class="panel-section">
+        <div class="panel-label">Speed</div>
+        <div class="speed-row">
+          <input type="range" id="speed-slider" min="0" max="1" step="0.1" value="0.6">
+          <div class="speed-val" id="speed-val">0.6</div>
+        </div>
+      </div>
+
+      <div class="panel-section">
+        <div class="panel-label">Command frame</div>
+        <div class="cmd-box" id="cmd-box">—</div>
+      </div>
+
+      <div class="panel-section">
+        <button class="stop-btn" onclick="emergencyStop()">■ EMERGENCY STOP</button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+
+<script type="module" src="adeva.js"></script>
+</body>
+</html>

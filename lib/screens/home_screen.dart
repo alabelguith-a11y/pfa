@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'dart:convert';
+import 'package:webview_flutter/webview_flutter.dart';
 import '../models/gesture_data.dart';
 import '../services/gesture_loader_service.dart';
 import '../services/glove_connection_service.dart';
@@ -20,10 +22,15 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _sending = false;
   int _delayBetweenMs = 400;
   String? _selectedWord;
+  late final WebViewController _web;
 
   @override
   void initState() {
     super.initState();
+    _web = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setBackgroundColor(const Color(0x00000000))
+      ..loadFlutterAsset('assets/adeva.html');
     _loadLibrary();
   }
 
@@ -32,11 +39,22 @@ class _HomeScreenState extends State<HomeScreen> {
     if (mounted) setState(() { _library = lib; _loading = false; });
   }
 
+  Future<void> _pushToVisualizer(GestureData g) async {
+    final id = jsonEncode(g.id);
+    final angles = jsonEncode(g.angles);
+    try {
+      await _web.runJavaScript('window.setGestureFromFlutter($id, $angles);');
+    } catch (_) {
+      // WebView not ready yet; ignore.
+    }
+  }
+
   Future<void> _sendLetter(String letter) async {
     if (_library == null) return;
     final g = _library!.letterGesture(letter);
     if (g == null) return;
     setState(() => _sending = true);
+    await _pushToVisualizer(g);
     await _glove.sendGesture(g);
     if (mounted) setState(() => _sending = false);
   }
@@ -51,7 +69,13 @@ class _HomeScreenState extends State<HomeScreen> {
       final g = _library!.letterGesture(text[i]);
       if (g != null) gestures.add(g);
     }
-    await _glove.sendSequence(gestures, delayBetweenMs: _delayBetweenMs);
+    for (int i = 0; i < gestures.length; i++) {
+      await _pushToVisualizer(gestures[i]);
+      await _glove.sendGesture(gestures[i]);
+      if (i < gestures.length - 1 && _delayBetweenMs > 0) {
+        await Future<void>.delayed(Duration(milliseconds: _delayBetweenMs));
+      }
+    }
     if (mounted) setState(() => _sending = false);
   }
 
@@ -61,7 +85,13 @@ class _HomeScreenState extends State<HomeScreen> {
     if (seq == null || seq.isEmpty) return;
     setState(() => _sending = true);
     final gestures = seq.map((id) => _library!.letterGesture(id)).whereType<GestureData>().toList();
-    await _glove.sendSequence(gestures, delayBetweenMs: _delayBetweenMs);
+    for (int i = 0; i < gestures.length; i++) {
+      await _pushToVisualizer(gestures[i]);
+      await _glove.sendGesture(gestures[i]);
+      if (i < gestures.length - 1 && _delayBetweenMs > 0) {
+        await Future<void>.delayed(Duration(milliseconds: _delayBetweenMs));
+      }
+    }
     if (mounted) setState(() => _sending = false);
   }
 
@@ -105,6 +135,14 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: SizedBox(
+                      height: 320,
+                      child: WebViewWidget(controller: _web),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
                   const Text('Saisie texte / lettres', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 8),
                   TextField(
@@ -209,14 +247,11 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
 
-    // --- Step 2: Request BLE + location permissions (with "Open settings" if denied)
+    // --- Step 2: Request BLE permissions (with "Open settings" if denied)
     var scanStatus = await Permission.bluetoothScan.status;
     var connectStatus = await Permission.bluetoothConnect.status;
-    var locationStatus = await Permission.location.status;
 
-    if (scanStatus.isPermanentlyDenied ||
-        connectStatus.isPermanentlyDenied ||
-        locationStatus.isPermanentlyDenied) {
+    if (scanStatus.isPermanentlyDenied || connectStatus.isPermanentlyDenied) {
       if (mounted) Navigator.of(ctx).pop();
       if (!mounted) return;
       await _showPermissionSettingsDialog(ctx);
@@ -224,9 +259,8 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     if (!scanStatus.isGranted) scanStatus = await Permission.bluetoothScan.request();
     if (!connectStatus.isGranted) connectStatus = await Permission.bluetoothConnect.request();
-    if (!locationStatus.isGranted) locationStatus = await Permission.location.request();
 
-    if (!scanStatus.isGranted || !connectStatus.isGranted || !locationStatus.isGranted) {
+    if (!scanStatus.isGranted || !connectStatus.isGranted) {
       if (mounted) Navigator.of(ctx).pop();
       if (!mounted) return;
       await _showPermissionSettingsDialog(ctx);

@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'screens/home_screen.dart';
+import 'webview_register_stub.dart'
+    if (dart.library.html) 'webview_register_web.dart' as webview_register;
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  webview_register.registerWebViewPlatform();
   SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
