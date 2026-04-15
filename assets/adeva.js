@@ -121,7 +121,7 @@ function animate() {
             chain.bones.forEach((boneName) => {
                 const bone = boneMap[boneName];
                 if (bone) {
-                    bone.rotation.x = -radPerJoint * 2;
+                    bone.rotation.x = -radPerJoint * 2.5;
                     bone.rotation.y = 0;
                     bone.rotation.z = 0;
                 }

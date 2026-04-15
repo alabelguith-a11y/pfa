@@ -2,9 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
-import '../models/log_entry.dart';
 import '../models/gesture_data.dart';
-import 'history_service.dart';
 
 enum ConnectionMode { none, ble, wifi }
 
@@ -21,10 +19,6 @@ class GloveConnectionService {
   Socket? _wifiSocket;
   String _wifiHost = '192.168.1.100';
   int _wifiPort = 8888;
-
-  final StreamController<LogEntry> _logController =
-      StreamController<LogEntry>.broadcast();
-  Stream<LogEntry> get logStream => _logController.stream;
 
   final StreamController<bool> _connectionController =
       StreamController<bool>.broadcast();
@@ -77,22 +71,8 @@ class GloveConnectionService {
       _bleDevice = device;
       _mode = ConnectionMode.ble;
       _connectionController.add(true);
-      final le = LogEntry(
-        timestamp: DateTime.now(),
-        command: 'BLE connect',
-        status: 'ack',
-        detail: device.remoteId.toString(),
-      );
-      _logController.add(le);
-      HistoryService.addEntry(le);
     } catch (e) {
       _connectionController.add(false);
-      _logController.add(LogEntry(
-        timestamp: DateTime.now(),
-        command: 'BLE connect',
-        status: 'error',
-        detail: e.toString(),
-      ));
       rethrow;
     }
   }
@@ -103,22 +83,8 @@ class GloveConnectionService {
           timeout: const Duration(seconds: 5));
       _mode = ConnectionMode.wifi;
       _connectionController.add(true);
-      final le = LogEntry(
-        timestamp: DateTime.now(),
-        command: 'WiFi connect',
-        status: 'ack',
-        detail: '$_wifiHost:$_wifiPort',
-      );
-      _logController.add(le);
-      HistoryService.addEntry(le);
     } catch (e) {
       _connectionController.add(false);
-      _logController.add(LogEntry(
-        timestamp: DateTime.now(),
-        command: 'WiFi connect',
-        status: 'error',
-        detail: e.toString(),
-      ));
       rethrow;
     }
   }
@@ -144,21 +110,8 @@ class GloveConnectionService {
     if (_mode == ConnectionMode.ble && _gestureChar != null) {
       try {
         await _gestureChar!.write(bytes);
-        final le = LogEntry(
-          timestamp: DateTime.now(),
-          command: frame,
-          status: 'sent',
-        );
-        _logController.add(le);
-        HistoryService.addEntry(le);
         return true;
       } catch (e) {
-        _logController.add(LogEntry(
-          timestamp: DateTime.now(),
-          command: frame,
-          status: 'error',
-          detail: e.toString(),
-        ));
         return false;
       }
     }
@@ -167,33 +120,12 @@ class GloveConnectionService {
       try {
         _wifiSocket!.add(bytes);
         _wifiSocket!.add([0x0a]);
-        final le2 = LogEntry(
-          timestamp: DateTime.now(),
-          command: frame,
-          status: 'sent',
-        );
-        _logController.add(le2);
-        HistoryService.addEntry(le2);
         return true;
       } catch (e) {
-        _logController.add(LogEntry(
-          timestamp: DateTime.now(),
-          command: frame,
-          status: 'error',
-          detail: e.toString(),
-        ));
         return false;
       }
     }
 
-    final le3 = LogEntry(
-      timestamp: DateTime.now(),
-      command: frame,
-      status: 'sent',
-      detail: '(simulated - not connected)',
-    );
-    _logController.add(le3);
-    HistoryService.addEntry(le3);
     return true;
   }
 
@@ -219,16 +151,9 @@ class GloveConnectionService {
       _wifiSocket!.add(bytes);
       _wifiSocket!.add([0x0a]);
     }
-    _logController.add(LogEntry(
-      timestamp: DateTime.now(),
-      command: frame,
-      status: 'sent',
-      detail: 'Emergency stop',
-    ));
   }
 
   void dispose() {
-    _logController.close();
     _connectionController.close();
   }
 }
