@@ -1,321 +1,71 @@
-@import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500&display=swap');
+:root {
+  --bg: #0a0b0e;
+  --accent: #4ff8c8;
+}
 
-  :root {
-    --bg: #0a0b0e;
-    --surface: #13151a;
-    --panel: #1a1d26;
-    --border: rgba(255,255,255,0.07);
-    --accent: #4ff8c8;
-    --accent2: #6c63ff;
-    --text: #e8eaf0;
-    --muted: #5a5f72;
-    --danger: #ff4d6d;
-  }
+* { box-sizing: border-box; margin: 0; padding: 0; }
 
-  * { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden; /* Prevent scrolling */
+  display: flex;
+  flex-direction: column;
+}
 
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: 'DM Sans', sans-serif;
-    height: 100vh;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-  }
+/* Header can stay if you want the logo, or set to display:none */
+header {
+  position: absolute;
+  top: 0;
+  width: 100%;
+  z-index: 10;
+  padding: 15px;
+  pointer-events: none; /* Let clicks pass through to the 3D model */
+}
 
-  header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 12px 20px;
-    border-bottom: 1px solid var(--border);
-    background: var(--surface);
-    flex-shrink: 0;
-  }
+.logo {
+  color: #fff;
+  font-family: sans-serif;
+  font-size: 14px;
+  letter-spacing: 2px;
+}
 
-  .logo {
-    font-family: 'Space Mono', monospace;
-    font-size: 13px;
-    font-weight: 700;
-    letter-spacing: 0.15em;
-    color: var(--accent);
-  }
+.main {
+  flex: 1;
+  position: relative;
+}
 
-  .logo span { color: var(--muted); }
+#canvas-wrap {
+  width: 100%;
+  height: 100%;
+}
 
-  .status-pill {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 11px;
-    font-family: 'Space Mono', monospace;
-    color: var(--muted);
-    background: var(--panel);
-    border: 1px solid var(--border);
-    padding: 4px 10px;
-    border-radius: 20px;
-  }
+/* Hide the panel entirely */
+.panel {
+  display: none !important;
+}
 
-  .status-dot {
-    width: 6px; height: 6px;
-    border-radius: 50%;
-    background: var(--accent);
-    box-shadow: 0 0 6px var(--accent);
-    animation: pulse 2s infinite;
-  }
+/* Keep the loader visible while starting */
+.loading-overlay {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
 
-  @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.4; }
-  }
+.loader-ring {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(79, 248, 200, 0.2);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
 
-  .main {
-    display: flex;
-    flex: 1;
-    overflow: hidden;
-  }
-
-  /* ── 3D Canvas ── */
-  #canvas-wrap {
-    flex: 1;
-    position: relative;
-    background: var(--bg);
-  }
-
-  #canvas-wrap canvas {
-    display: block;
-    width: 100% !important;
-    height: 100% !important;
-  }
-
-  .loading-overlay {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    background: var(--bg);
-    z-index: 10;
-    gap: 16px;
-    transition: opacity 0.5s;
-  }
-
-  .loader-ring {
-    width: 48px; height: 48px;
-    border: 2px solid var(--border);
-    border-top-color: var(--accent);
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-  }
-
-  @keyframes spin { to { transform: rotate(360deg); } }
-
-  .loading-text {
-    font-family: 'Space Mono', monospace;
-    font-size: 11px;
-    color: var(--muted);
-    letter-spacing: 0.1em;
-  }
-
-  /* ── Right Panel ── */
-  .panel {
-    width: 300px;
-    background: var(--surface);
-    border-left: 1px solid var(--border);
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    flex-shrink: 0;
-  }
-
-  .panel-section {
-    padding: 16px;
-    border-bottom: 1px solid var(--border);
-  }
-
-  .panel-label {
-    font-family: 'Space Mono', monospace;
-    font-size: 9px;
-    letter-spacing: 0.18em;
-    color: var(--muted);
-    text-transform: uppercase;
-    margin-bottom: 12px;
-  }
-
-  /* ── Gesture Grid ── */
-  .gesture-grid {
-    display: grid;
-    grid-template-columns: repeat(6, 1fr);
-    gap: 4px;
-  }
-
-  .gesture-btn {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    color: var(--muted);
-    font-family: 'Space Mono', monospace;
-    font-size: 11px;
-    padding: 7px 4px;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: all 0.15s;
-    text-align: center;
-    font-weight: 700;
-  }
-
-  .gesture-btn:hover {
-    border-color: var(--accent);
-    color: var(--accent);
-    background: rgba(79,248,200,0.05);
-  }
-
-  .gesture-btn.active {
-    border-color: var(--accent);
-    color: var(--bg);
-    background: var(--accent);
-  }
-
-  /* ── Finger Bars ── */
-  .finger-list { display: flex; flex-direction: column; gap: 10px; }
-
-  .finger-row {
-    display: grid;
-    grid-template-columns: 56px 1fr 36px;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .finger-name {
-    font-size: 11px;
-    color: var(--muted);
-    font-family: 'Space Mono', monospace;
-  }
-
-  .finger-track {
-    height: 4px;
-    background: var(--panel);
-    border-radius: 2px;
-    overflow: hidden;
-  }
-
-  .finger-fill {
-    height: 100%;
-    background: var(--accent);
-    border-radius: 2px;
-    transition: width 0.4s cubic-bezier(0.25, 1, 0.5, 1);
-    box-shadow: 0 0 6px var(--accent);
-  }
-
-  .finger-val {
-    font-family: 'Space Mono', monospace;
-    font-size: 10px;
-    color: var(--muted);
-    text-align: right;
-  }
-
-  /* ── Word section ── */
-  .word-grid {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 5px;
-  }
-
-  .word-btn {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    color: var(--muted);
-    font-size: 11px;
-    padding: 5px 10px;
-    border-radius: 4px;
-    cursor: pointer;
-    transition: all 0.15s;
-    font-family: 'DM Sans', sans-serif;
-  }
-
-  .word-btn:hover {
-    border-color: var(--accent2);
-    color: var(--accent2);
-    background: rgba(108,99,255,0.06);
-  }
-
-  .word-btn.active {
-    border-color: var(--accent2);
-    color: #fff;
-    background: var(--accent2);
-  }
-
-  /* ── Speed ── */
-  .speed-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-
-  input[type=range] {
-    flex: 1;
-    -webkit-appearance: none;
-    height: 3px;
-    background: var(--panel);
-    border-radius: 2px;
-    outline: none;
-  }
-
-  input[type=range]::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    width: 14px; height: 14px;
-    border-radius: 50%;
-    background: var(--accent);
-    cursor: pointer;
-    box-shadow: 0 0 6px var(--accent);
-  }
-
-  .speed-val {
-    font-family: 'Space Mono', monospace;
-    font-size: 10px;
-    color: var(--accent);
-    min-width: 28px;
-    text-align: right;
-  }
-
-  /* ── Stop button ── */
-  .stop-btn {
-    width: 100%;
-    background: transparent;
-    border: 1px solid rgba(255,77,109,0.4);
-    color: var(--danger);
-    font-family: 'Space Mono', monospace;
-    font-size: 11px;
-    letter-spacing: 0.1em;
-    padding: 10px;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: all 0.15s;
-  }
-
-  .stop-btn:hover {
-    background: rgba(255,77,109,0.1);
-    border-color: var(--danger);
-  }
-
-  /* ── Command output ── */
-  .cmd-box {
-    font-family: 'Space Mono', monospace;
-    font-size: 10px;
-    color: var(--accent);
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 8px 10px;
-    min-height: 32px;
-    word-break: break-all;
-    line-height: 1.5;
-  }
-
-  .panel-scroll {
-    flex: 1;
-    overflow-y: auto;
-    scrollbar-width: thin;
-    scrollbar-color: var(--border) transparent;
-  }
+@keyframes spin { to { transform: rotate(360deg); } }

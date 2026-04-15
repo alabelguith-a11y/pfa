@@ -7,6 +7,8 @@ import '../models/gesture_data.dart';
 import '../services/gesture_loader_service.dart';
 import '../services/glove_connection_service.dart';
 
+import '../services/local_asset_server.dart';
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -24,29 +26,53 @@ class _HomeScreenState extends State<HomeScreen> {
   String? _selectedWord;
   late final WebViewController _web;
 
-  @override
-  void initState() {
-    super.initState();
-    _web = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setBackgroundColor(const Color(0x00000000))
-      ..loadFlutterAsset('assets/adeva.html');
-    _loadLibrary();
-  }
+@override
+void initState() {
+  super.initState();
+  // Initialize the controller first
+  _web = WebViewController()
+    ..setJavaScriptMode(JavaScriptMode.unrestricted)
+    ..setBackgroundColor(const Color(0x00000000));
 
+  // Configure navigation and load the asset
+  _web.setNavigationDelegate(
+    NavigationDelegate(
+      onWebResourceError: (error) => debugPrint("WebView Error: ${error.description}"),
+    ),
+  );
+  
+  _initializeWebView();
+  _loadLibrary();
+}
+
+Future<void> _initializeWebView() async {
+  final server = LocalAssetServer();
+  await server.start();
+  _web.loadRequest(Uri.parse('http://127.0.0.1:${server.port}/adeva.html'));
+}
+
+Future<void> _pushToVisualizer(GestureData g) async {
+  try {
+    // 1. Create the payload map
+    final Map<String, dynamic> data = {
+      'id': g.id,
+      'status': 'Moving to ${g.id}',
+      'angles': g.angles,
+    };
+
+    // 2. Convert to JSON string
+    String jsonString = jsonEncode(data);
+
+    // 3. Cast the data into the Puppet (WebView)
+    // We escape the jsonString with single quotes so JS receives it as one string
+    await _web.runJavaScript("receiveDataFromFlutter('$jsonString')");
+  } catch (e) {
+    debugPrint("Error pushing to visualizer: $e");
+  }
+}
   Future<void> _loadLibrary() async {
     final lib = await GestureLoaderService.load();
     if (mounted) setState(() { _library = lib; _loading = false; });
-  }
-
-  Future<void> _pushToVisualizer(GestureData g) async {
-    final id = jsonEncode(g.id);
-    final angles = jsonEncode(g.angles);
-    try {
-      await _web.runJavaScript('window.setGestureFromFlutter($id, $angles);');
-    } catch (_) {
-      // WebView not ready yet; ignore.
-    }
   }
 
   Future<void> _sendLetter(String letter) async {

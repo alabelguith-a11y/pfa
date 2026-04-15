@@ -2,7 +2,6 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-// 1. DATA CONFIGURATION (angles match assets/gesture.json — thumb, index, middle, ring, pinky)
 const GESTURES = {
     "A": [0, 90, 90, 90, 90],
     "B": [0, 0, 0, 0, 90],
@@ -33,7 +32,6 @@ const GESTURES = {
     "OK": [45, 90, 0, 0, 0]
 };
 
-// UPDATED: Using Bone001 naming convention and forcing X axis
 const FINGER_CHAINS = [
     { name: 'thumb',  bones: ['Bone018', 'Bone019'], axis: 'x' },
     { name: 'index',  bones: ['Bone008', 'Bone012', 'Bone014'], axis: 'x' },
@@ -45,87 +43,90 @@ const FINGER_CHAINS = [
 let targetAngles = [0, 0, 0, 0, 0];
 let currentAngles = [0, 0, 0, 0, 0];
 let boneMap = {};
-window.boneMap = boneMap; 
+window.boneMap = boneMap;
 let modelLoaded = false;
 let lerpSpeed = 0.12;
 
-// 2. SCENE SETUP
-const scene = new THREE.Scene();
-const wrap = document.getElementById('canvas-wrap');
-const camera = new THREE.PerspectiveCamera(45, wrap.clientWidth / wrap.clientHeight, 0.1, 1000);
-camera.position.set(0, 0.5, 4);
+let scene;
+let camera;
+let renderer;
+let controls;
+let wrap;
 
-const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-renderer.setSize(wrap.clientWidth, wrap.clientHeight);
-wrap.appendChild(renderer.domElement);
+function applyFlutterGesture(id, angles) {
+    if (Array.isArray(angles) && angles.length === 5) {
+        targetAngles = angles.map((v) => Number(v) || 0);
+    } else if (id != null && GESTURES[id]) {
+        targetAngles = [...GESTURES[id]];
+    }
+    const cmdBox = document.getElementById('cmd-box');
+    if (cmdBox) {
+        const label = id != null ? String(id) : '—';
+        cmdBox.textContent = `CMD: ${label}`;
+    }
+}
 
-const controls = new OrbitControls(camera, renderer.domElement);
-controls.enableDamping = true;
+window.setGestureFromFlutter = (id, angles) => {
+    applyFlutterGesture(id, angles);
+};
 
-// 1. Soft base light (Ambient)
-// Lowering this from 0.8 to 0.3-0.4 prevents the "washed out" look
-scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+window.receiveDataFromFlutter = function(jsonString) {
+    try {
+        const data = JSON.parse(jsonString);
+        applyFlutterGesture(data.id, data.angles);
+        window.setCharacterFromFlutter(data.id);
+    } catch (e) {
+        console.error("Error parsing data from Flutter:", e);
+    }
+};
 
-// 2. Primary Accent Light (The Green one)
-// This gives the hand that high-tech "ADEVA" green glow
-const mainLight = new THREE.DirectionalLight(0x4ff8c8, 1.2);
-mainLight.position.set(2, 5, 5); // Positioned higher up
-scene.add(mainLight);
+window.updateHandFromFlutter = function (angles) {
+    if (Array.isArray(angles) && angles.length === 5) {
+        targetAngles = [...angles];
+    }
+};
 
-// 3. Fill Light (The "Customer Visibility" light)
-// This hits the side that was previously dark, using a neutral white
-const fillLight = new THREE.DirectionalLight(0xffffff, 0.6);
-fillLight.position.set(-5, 0, -2); // Hits from the opposite side and slightly behind
-scene.add(fillLight);
+window.setCharacterFromFlutter = (ch) => {
+    const c = ch != null ? String(ch).toUpperCase().slice(0, 1) : '';
+    const cmdBox = document.getElementById('cmd-box');
+    if (cmdBox) cmdBox.textContent = c ? `Lettre: ${c}` : '—';
+};
 
-// 4. Rim Light (Optional but looks great)
-// Placed behind the hand to give a crisp outline
-const rimLight = new THREE.PointLight(0xffffff, 0.5);
-rimLight.position.set(0, 5, -5);
-scene.add(rimLight);
-// 3. LOAD MODEL
-const loader = new GLTFLoader();
-loader.load('./hand.glb', (gltf) => {
-    const model = gltf.scene;
-    scene.add(model);
-    model.scale.set(1.5, 1.5, 1.5);
-    model.position.y = -1.2;
+function showOverlayMessage(html) {
+    const overlay = document.getElementById('overlay');
+    if (overlay) overlay.innerHTML = html;
+}
 
-    model.traverse(obj => {
-        if (obj.isBone) {
-            boneMap[obj.name] = obj;
-        }
-    });
+function fitRendererToWrap() {
+    if (!wrap || !camera || !renderer) return;
+    const w = Math.max(1, wrap.clientWidth || window.innerWidth);
+    const h = Math.max(1, wrap.clientHeight || window.innerHeight);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+    renderer.setSize(w, h);
+}
 
-    document.getElementById('overlay').style.display = 'none';
-    modelLoaded = true;
-    animate();
-});
-
-// 4. ANIMATION LOOP
 function animate() {
+    if (!renderer || !scene || !camera) return;
     requestAnimationFrame(animate);
-    controls.update();
+    if (controls) controls.update();
 
     if (modelLoaded) {
-        // Update interpolation
         for (let i = 0; i < 5; i++) {
             currentAngles[i] = THREE.MathUtils.lerp(currentAngles[i], targetAngles[i], lerpSpeed);
-            
+
             const chain = FINGER_CHAINS[i];
             const radPerJoint = THREE.MathUtils.degToRad(currentAngles[i] / chain.bones.length);
 
-            chain.bones.forEach(boneName => {
+            chain.bones.forEach((boneName) => {
                 const bone = boneMap[boneName];
                 if (bone) {
-                    // Force rotation on X axis
-                    bone.rotation.x = -radPerJoint *2;
+                    bone.rotation.x = -radPerJoint * 2;
                     bone.rotation.y = 0;
                     bone.rotation.z = 0;
                 }
             });
 
-            // Update UI
             const bar = document.getElementById(`bar-${i}`);
             if (bar) bar.style.width = `${(currentAngles[i] / 90) * 100}%`;
             const val = document.getElementById(`val-${i}`);
@@ -135,35 +136,110 @@ function animate() {
     renderer.render(scene, camera);
 }
 
-// 5. UI INTERACTION (BUTTONS)
-const alphaGrid = document.getElementById('alpha-grid');
-Object.keys(GESTURES).forEach(key => {
-    const btn = document.createElement('div');
-    btn.className = 'gesture-item';
-    btn.innerText = key;
-    btn.onclick = () => {
-        // This line updates the target array that animate() is watching
-        targetAngles = [...GESTURES[key]];
-        document.getElementById('cmd-box').innerText = `CMD: GESTURE_${key}`;
-    };
-    alphaGrid.appendChild(btn);
-});
-
-// Speed Slider
-const speedSlider = document.getElementById('speed-slider');
-speedSlider.oninput = (e) => {
-    lerpSpeed = parseFloat(e.target.value);
-    document.getElementById('speed-val').innerText = lerpSpeed;
-};
-
-// 6. FLUTTER BRIDGE (optional)
-// Flutter can call this to drive the model in real time.
-window.setGestureFromFlutter = (id, angles) => {
-    if (Array.isArray(angles) && angles.length === 5) {
-        targetAngles = angles.map((v) => Number(v) || 0);
-    } else if (id && GESTURES[id]) {
-        targetAngles = [...GESTURES[id]];
+function startHandViz() {
+    wrap = document.getElementById('canvas-wrap');
+    if (!wrap) {
+        showOverlayMessage('<p style="color:#f88;font-family:sans-serif;padding:16px;">#canvas-wrap introuvable</p>');
+        return;
     }
-    const cmdBox = document.getElementById('cmd-box');
-    if (cmdBox) cmdBox.innerText = `CMD: ${id ?? '—'}`;
-};
+
+    const initialW = Math.max(1, wrap.clientWidth || window.innerWidth);
+    const initialH = Math.max(1, wrap.clientHeight || window.innerHeight);
+
+    scene = new THREE.Scene();
+    camera = new THREE.PerspectiveCamera(45, initialW / initialH, 0.1, 1000);
+    camera.position.set(0, 0.5, 4);
+
+    try {
+        renderer = new THREE.WebGLRenderer({
+            antialias: true,
+            alpha: true,
+            powerPreference: 'default',
+            failIfMajorPerformanceCaveat: false,
+        });
+    } catch (e) {
+        showOverlayMessage(
+            '<p style="color:#f88;font-family:sans-serif;padding:16px;">WebGL indisponible dans cette WebView.</p>'
+        );
+        return;
+    }
+
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setSize(initialW, initialH);
+    wrap.appendChild(renderer.domElement);
+
+    controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+
+    scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+
+    const mainLight = new THREE.DirectionalLight(0x4ff8c8, 1.2);
+    mainLight.position.set(2, 5, 5);
+    scene.add(mainLight);
+
+    const fillLight = new THREE.DirectionalLight(0xffffff, 0.6);
+    fillLight.position.set(-5, 0, -2);
+    scene.add(fillLight);
+
+    const rimLight = new THREE.PointLight(0xffffff, 0.5);
+    rimLight.position.set(0, 5, -5);
+    scene.add(rimLight);
+
+    window.addEventListener('resize', fitRendererToWrap);
+
+    const loader = new GLTFLoader();
+    loader.load(
+        './hand.glb',
+        (gltf) => {
+            const model = gltf.scene;
+            scene.add(model);
+            model.scale.set(1.5, 1.5, 1.5);
+            model.position.y = -1.2;
+
+            model.traverse((obj) => {
+                if (obj.isBone) {
+                    boneMap[obj.name] = obj;
+                }
+            });
+
+            const overlay = document.getElementById('overlay');
+            if (overlay) overlay.style.display = 'none';
+            modelLoaded = true;
+            fitRendererToWrap();
+        },
+        undefined,
+        () => {
+            showOverlayMessage(
+                '<p style="color:#f88;font-family:sans-serif;padding:16px;">Modèle 3D indisponible (hand.glb)</p>'
+            );
+        }
+    );
+
+    animate();
+}
+
+const alphaGrid = document.getElementById('alpha-grid');
+if (alphaGrid) {
+    Object.keys(GESTURES).forEach((key) => {
+        const btn = document.createElement('div');
+        btn.className = 'gesture-item';
+        btn.innerText = key;
+        btn.onclick = () => {
+            targetAngles = [...GESTURES[key]];
+            const cmdBox = document.getElementById('cmd-box');
+            if (cmdBox) cmdBox.innerText = `CMD: GESTURE_${key}`;
+        };
+        alphaGrid.appendChild(btn);
+    });
+}
+
+const speedSlider = document.getElementById('speed-slider');
+if (speedSlider) {
+    speedSlider.oninput = (e) => {
+        lerpSpeed = parseFloat(e.target.value);
+        const speedVal = document.getElementById('speed-val');
+        if (speedVal) speedVal.innerText = lerpSpeed;
+    };
+}
+
+requestAnimationFrame(startHandViz);
