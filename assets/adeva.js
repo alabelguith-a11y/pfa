@@ -29,11 +29,10 @@ const GESTURES = {
     "X": [90, 45, 45, 45, 90],
     "Y": [0, 90, 90, 90, 0],
     "Z": [0, 0, 0, 0, 90],
-    "OK": [45, 90, 0, 0, 0]
 };
 
 const FINGER_CHAINS = [
-    { name: 'thumb',  bones: ['Bone018', 'Bone019'], axis: 'x' },
+    { name: 'thumb',  bones: ['Bone018', 'Bone019'], axis: 'z' },
     { name: 'index',  bones: ['Bone008', 'Bone012', 'Bone014'], axis: 'x' },
     { name: 'middle', bones: ['Bone009', 'Bone013', 'Bone015'], axis: 'x' },
     { name: 'ring',   bones: ['Bone007', 'Bone011', 'Bone016'], axis: 'x' },
@@ -120,8 +119,12 @@ function animate() {
 
             chain.bones.forEach((boneName) => {
                 const bone = boneMap[boneName];
-                if (bone) {
-                    bone.rotation.x = -radPerJoint * 2.5;
+                if(boneName=="Bone018" || boneName=="Bone019") {
+                    bone.rotation.z = -radPerJoint*2 ;
+                    bone.rotation.x = 0;
+                    bone.rotation.y = 0;
+                } else if (bone) {
+                    bone.rotation.x = -radPerJoint *3;
                     bone.rotation.y = 0;
                     bone.rotation.z = 0;
                 }
@@ -193,8 +196,8 @@ function startHandViz() {
         (gltf) => {
             const model = gltf.scene;
             scene.add(model);
-            model.scale.set(1.5, 1.5, 1.5);
-            model.position.y = -1.2;
+            model.scale.set(1.0, 1.0, 1.0);
+            model.position.y = -0.8;
 
             model.traverse((obj) => {
                 if (obj.isBone) {
