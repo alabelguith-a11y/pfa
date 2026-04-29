@@ -31,7 +31,8 @@ class GestureData {
       };
 
   String toCommandFrame() {
-    return '{"id":"$id","speed":$speed}';
+    final anglesJson = angles.map((a) => a.toString()).join(',');
+    return '{"id":"$id","speed":$speed,"angles":[${anglesJson}]}';
   }
 }
 

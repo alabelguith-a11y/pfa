@@ -6,6 +6,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 import '../models/gesture_data.dart';
 import '../services/gesture_loader_service.dart';
 import '../services/glove_connection_service.dart';
+import 'manual_control_screen.dart';
 
 import '../services/local_asset_server.dart';
 
@@ -22,57 +23,63 @@ class _HomeScreenState extends State<HomeScreen> {
   GestureLibrary? _library;
   bool _loading = true;
   bool _sending = false;
-  int _delayBetweenMs = 400;
+  int _delayBetweenMs = 800;
   String? _selectedWord;
   late final WebViewController _web;
 
-@override
-void initState() {
-  super.initState();
-  // Initialize the controller first
-  _web = WebViewController()
-    ..setJavaScriptMode(JavaScriptMode.unrestricted)
-    ..setBackgroundColor(const Color(0x00000000));
+  @override
+  void initState() {
+    super.initState();
+    // Initialize the controller first
+    _web = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setBackgroundColor(const Color(0x00000000));
 
-  // Configure navigation and load the asset
-  _web.setNavigationDelegate(
-    NavigationDelegate(
-      onWebResourceError: (error) => debugPrint("WebView Error: ${error.description}"),
-    ),
-  );
-  
-  _initializeWebView();
-  _loadLibrary();
-}
+    // Configure navigation and load the asset
+    _web.setNavigationDelegate(
+      NavigationDelegate(
+        onWebResourceError: (error) =>
+            debugPrint("WebView Error: ${error.description}"),
+      ),
+    );
 
-Future<void> _initializeWebView() async {
-  final server = LocalAssetServer();
-  await server.start();
-  _web.loadRequest(Uri.parse('http://127.0.0.1:${server.port}/adeva.html'));
-}
-
-Future<void> _pushToVisualizer(GestureData g) async {
-  try {
-    // 1. Create the payload map
-    final Map<String, dynamic> data = {
-      'id': g.id,
-      'status': 'Moving to ${g.id}',
-      'angles': g.angles,
-    };
-
-    // 2. Convert to JSON string
-    String jsonString = jsonEncode(data);
-
-    // 3. Cast the data into the Puppet (WebView)
-    // We escape the jsonString with single quotes so JS receives it as one string
-    await _web.runJavaScript("receiveDataFromFlutter('$jsonString')");
-  } catch (e) {
-    debugPrint("Error pushing to visualizer: $e");
+    _initializeWebView();
+    _loadLibrary();
   }
-}
+
+  Future<void> _initializeWebView() async {
+    final server = LocalAssetServer();
+    await server.start();
+    _web.loadRequest(Uri.parse('http://127.0.0.1:${server.port}/adeva.html'));
+  }
+
+  Future<void> _pushToVisualizer(GestureData g) async {
+    try {
+      // 1. Create the payload map
+      final Map<String, dynamic> data = {
+        'id': g.id,
+        'status': 'Moving to ${g.id}',
+        'angles': g.angles,
+      };
+
+      // 2. Convert to JSON string
+      String jsonString = jsonEncode(data);
+
+      // 3. Cast the data into the Puppet (WebView)
+      // We escape the jsonString with single quotes so JS receives it as one string
+      await _web.runJavaScript("receiveDataFromFlutter('$jsonString')");
+    } catch (e) {
+      debugPrint("Error pushing to visualizer: $e");
+    }
+  }
+
   Future<void> _loadLibrary() async {
     final lib = await GestureLoaderService.load();
-    if (mounted) setState(() { _library = lib; _loading = false; });
+    if (mounted)
+      setState(() {
+        _library = lib;
+        _loading = false;
+      });
   }
 
   Future<void> _sendLetter(String letter) async {
@@ -87,7 +94,10 @@ Future<void> _pushToVisualizer(GestureData g) async {
 
   Future<void> _sendText() async {
     if (_library == null) return;
-    final text = _textController.text.trim().toUpperCase().replaceAll(RegExp(r'[^A-Z]'), '');
+    final text = _textController.text
+        .trim()
+        .toUpperCase()
+        .replaceAll(RegExp(r'[^A-Z]'), '');
     if (text.isEmpty) return;
     setState(() => _sending = true);
     final gestures = <GestureData>[];
@@ -110,7 +120,10 @@ Future<void> _pushToVisualizer(GestureData g) async {
     final seq = _library!.wordToSequence(word);
     if (seq == null || seq.isEmpty) return;
     setState(() => _sending = true);
-    final gestures = seq.map((id) => _library!.letterGesture(id)).whereType<GestureData>().toList();
+    final gestures = seq
+        .map((id) => _library!.letterGesture(id))
+        .whereType<GestureData>()
+        .toList();
     for (int i = 0; i < gestures.length; i++) {
       await _pushToVisualizer(gestures[i]);
       await _glove.sendGesture(gestures[i]);
@@ -119,6 +132,28 @@ Future<void> _pushToVisualizer(GestureData g) async {
       }
     }
     if (mounted) setState(() => _sending = false);
+  }
+
+  Future<void> _emergencyStop() async {
+    if (_sending) return;
+    setState(() => _sending = true);
+    try {
+      await _glove.emergencyStop();
+      await _pushToVisualizer(
+        const GestureData(
+          id: 'STOP',
+          speed: 0,
+          durationMs: 0,
+          angles: [0, 0, 0, 0, 0],
+        ),
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Arrêt d\'urgence envoyé')),
+      );
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
   }
 
   @override
@@ -133,6 +168,16 @@ Future<void> _pushToVisualizer(GestureData g) async {
       appBar: AppBar(
         title: const Text('Commande'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.fingerprint),
+            tooltip: 'Contrôle manuel',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                  builder: (_) =>
+                      ManualControlScreen(pushToVisualizer: _pushToVisualizer)),
+            ),
+          ),
           StreamBuilder<bool>(
             stream: _glove.connectionStream,
             initialData: _glove.isConnected,
@@ -141,7 +186,8 @@ Future<void> _pushToVisualizer(GestureData g) async {
               return Padding(
                 padding: const EdgeInsets.only(right: 12),
                 child: Chip(
-                  avatar: Icon(connected ? Icons.link : Icons.link_off, color: Colors.white, size: 18),
+                  avatar: Icon(connected ? Icons.link : Icons.link_off,
+                      color: Colors.white, size: 18),
                   label: Text(connected ? 'Connecté' : 'Déconnecté'),
                   backgroundColor: connected ? Colors.green : Colors.grey,
                 ),
@@ -169,12 +215,14 @@ Future<void> _pushToVisualizer(GestureData g) async {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  const Text('Saisie texte / lettres', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                  const Text('Saisie mot',
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 8),
                   TextField(
                     controller: _textController,
                     decoration: const InputDecoration(
-                      hintText: 'Lettres ou mot (A–Z)',
+                      hintText: 'Mot (A–Z)',
                       border: OutlineInputBorder(),
                       suffixIcon: Icon(Icons.text_fields),
                     ),
@@ -184,17 +232,29 @@ Future<void> _pushToVisualizer(GestureData g) async {
                   const SizedBox(height: 12),
                   FilledButton.icon(
                     onPressed: _sending ? null : _sendText,
-                    icon: _sending ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.send),
-                    label: Text(_sending ? 'Envoi…' : 'Envoyer le texte'),
+                    icon: _sending
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Icon(Icons.send),
+                    label: Text(_sending ? 'Envoi…' : 'Envoyer le mot'),
                   ),
                   const SizedBox(height: 24),
-                  const Text('Mot prédéfini (glossaire)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                  const Text('Mot prédéfini (glossaire)',
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 8),
                   DropdownButtonFormField<String>(
                     value: _selectedWord,
-                    decoration: const InputDecoration(border: OutlineInputBorder()),
+                    decoration:
+                        const InputDecoration(border: OutlineInputBorder()),
                     hint: const Text('Choisir un mot'),
-                    items: _library?.wordList.map((w) => DropdownMenuItem(value: w, child: Text(w))).toList() ?? [],
+                    items: _library?.wordList
+                            .map((w) =>
+                                DropdownMenuItem(value: w, child: Text(w)))
+                            .toList() ??
+                        [],
                     onChanged: (v) => setState(() => _selectedWord = v),
                   ),
                   const SizedBox(height: 8),
@@ -205,42 +265,12 @@ Future<void> _pushToVisualizer(GestureData g) async {
                     child: const Text('Envoyer le mot'),
                   ),
                   const SizedBox(height: 24),
-                  const Text('Alphabet — toucher une lettre', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map((letter) {
-                      return ActionChip(
-                        label: Text(letter),
-                        onPressed: _sending ? null : () => _sendLetter(letter),
-                      );
-                    }).toList(),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      const Text('Délai entre poses (ms):'),
-                      const SizedBox(width: 8),
-                      SizedBox(
-                        width: 80,
-                        child: TextField(
-                          keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(
-                            border: OutlineInputBorder(),
-                            isDense: true,
-                          ),
-                          onChanged: (v) => _delayBetweenMs = int.tryParse(v) ?? 400,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
                   OutlinedButton.icon(
-                    onPressed: _glove.emergencyStop,
+                    onPressed: _emergencyStop,
                     icon: const Icon(Icons.warning_amber),
                     label: const Text('Arrêt d\'urgence'),
-                    style: OutlinedButton.styleFrom(foregroundColor: Colors.red),
+                    style:
+                        OutlinedButton.styleFrom(foregroundColor: Colors.red),
                   ),
                 ],
               ),
@@ -283,8 +313,10 @@ Future<void> _pushToVisualizer(GestureData g) async {
       await _showPermissionSettingsDialog(ctx);
       return;
     }
-    if (!scanStatus.isGranted) scanStatus = await Permission.bluetoothScan.request();
-    if (!connectStatus.isGranted) connectStatus = await Permission.bluetoothConnect.request();
+    if (!scanStatus.isGranted)
+      scanStatus = await Permission.bluetoothScan.request();
+    if (!connectStatus.isGranted)
+      connectStatus = await Permission.bluetoothConnect.request();
 
     if (!scanStatus.isGranted || !connectStatus.isGranted) {
       if (mounted) Navigator.of(ctx).pop();
@@ -314,7 +346,8 @@ Future<void> _pushToVisualizer(GestureData g) async {
       ),
     );
 
-    await FlutterBluePlus.startScan(timeout: const Duration(seconds: 10)).catchError((_) {});
+    await FlutterBluePlus.startScan(timeout: const Duration(seconds: 10))
+        .catchError((_) {});
     await Future.delayed(const Duration(seconds: 6));
     final results = FlutterBluePlus.lastScanResults;
     await FlutterBluePlus.stopScan();
@@ -325,7 +358,8 @@ Future<void> _pushToVisualizer(GestureData g) async {
     if (results.isEmpty) {
       ScaffoldMessenger.of(ctx).showSnackBar(
         const SnackBar(
-          content: Text('Aucun appareil trouvé. Déconnectez le gant de nRF Connect, assurez-vous que le Bluetooth est activé, puis réessayez.'),
+          content: Text(
+              'Aucun appareil trouvé. Déconnectez le gant de nRF Connect, assurez-vous que le Bluetooth est activé, puis réessayez.'),
           duration: Duration(seconds: 5),
         ),
       );
@@ -336,11 +370,15 @@ Future<void> _pushToVisualizer(GestureData g) async {
       context: ctx,
       builder: (c) => ListView(
         shrinkWrap: true,
-        children: results.map((r) => ListTile(
-          title: Text(r.device.platformName.isNotEmpty ? r.device.platformName : r.device.remoteId.toString()),
-          subtitle: Text(r.device.remoteId.toString()),
-          onTap: () => Navigator.pop(c, r.device),
-        )).toList(),
+        children: results
+            .map((r) => ListTile(
+                  title: Text(r.device.platformName.isNotEmpty
+                      ? r.device.platformName
+                      : r.device.remoteId.toString()),
+                  subtitle: Text(r.device.remoteId.toString()),
+                  onTap: () => Navigator.pop(c, r.device),
+                ))
+            .toList(),
       ),
     );
 
@@ -369,7 +407,8 @@ Future<void> _pushToVisualizer(GestureData g) async {
       await _glove.connectBle(chosen);
       if (!mounted) return;
       Navigator.of(ctx).pop();
-      ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('Connecté (BLE)')));
+      ScaffoldMessenger.of(ctx)
+          .showSnackBar(const SnackBar(content: Text('Connecté (BLE)')));
       setState(() {});
     } catch (e) {
       if (mounted) {
@@ -422,7 +461,8 @@ Future<void> _pushToVisualizer(GestureData g) async {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Text('Connexion gant', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const Text('Connexion gant',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               const SizedBox(height: 16),
               ListTile(
                 leading: const Icon(Icons.bluetooth),
@@ -479,7 +519,9 @@ Future<void> _pushToVisualizer(GestureData g) async {
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Annuler')),
           FilledButton(
             onPressed: () async {
               final host = hostController.text.trim();
@@ -488,10 +530,14 @@ Future<void> _pushToVisualizer(GestureData g) async {
               Navigator.pop(ctx);
               try {
                 await _glove.connectWifi();
-                if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Connecté (Wi-Fi)')));
+                if (mounted)
+                  ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Connecté (Wi-Fi)')));
                 setState(() {});
               } catch (e) {
-                if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erreur: $e')));
+                if (mounted)
+                  ScaffoldMessenger.of(context)
+                      .showSnackBar(SnackBar(content: Text('Erreur: $e')));
               }
             },
             child: const Text('Connecter'),

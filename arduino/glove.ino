@@ -50,7 +50,6 @@ const int GESTURE_TABLE[27][5] = {
 
 WiFiClient wifiClient;
 String lineBuffer;
-bool stopRequested = false;
 
 void processLine(const String& line);
 void moveToPose(const int angles[5], int stepDelayMs);
@@ -134,11 +133,6 @@ void loop() {
       }
     }
   }
-
-  if (stopRequested) {
-    stopRequested = false;
-    moveToPose(GESTURE_TABLE[26], 20);
-  }
 }
 
 void processLine(const String& line) {
@@ -162,6 +156,31 @@ void processLine(const String& line) {
     speed = line.substring(colon + 1, end).toFloat();
   }
 
+  // Try to parse an explicit angles array: "angles":[a,b,c,d,e]
+  int parsedAngles[5] = {0,0,0,0,0};
+  bool hasAngles = false;
+  idx = line.indexOf("\"angles\"");
+  if (idx >= 0) {
+    int b = line.indexOf('[', idx);
+    int e = line.indexOf(']', b);
+    if (b >= 0 && e > b) {
+      String inner = line.substring(b + 1, e);
+      int start = 0;
+      int count = 0;
+      for (int p = 0; p <= inner.length(); p++) {
+        if (p == inner.length() || inner[p] == ',') {
+          String tok = inner.substring(start, p);
+          int v = tok.toInt();
+          if (count < 5) {
+            parsedAngles[count++] = v;
+          }
+          start = p + 1;
+        }
+      }
+      if (count == 5) hasAngles = true;
+    }
+  }
+
   if (id.length() == 0) {
     sendWiFiResponse("NACK no id\n");
     Serial.println("[CMD] NACK: no id");
@@ -171,23 +190,37 @@ void processLine(const String& line) {
   id.toUpperCase();
 
   if (id == "STOP") {
-    stopRequested = true;
+    // If STOP carries explicit angles, use them. Otherwise move all fingers to 0°.
+    int stopAngles[5];
+    if (hasAngles) {
+      for (int i = 0; i < 5; i++) stopAngles[i] = constrain(parsedAngles[i], 0, 180);
+    } else {
+      for (int i = 0; i < 5; i++) stopAngles[i] = 0;
+    }
+    int stepDelay = 20; // immediate-ish
+    moveToPose(stopAngles, stepDelay);
     sendWiFiResponse("ACK STOP\n");
-    Serial.println("[CMD] STOP queued");
+    Serial.println("[CMD] STOP executed (all zeros)");
     return;
   }
 
-  if (id.length() != 1 || id[0] < 'A' || id[0] > 'Z') {
-    sendWiFiResponse("NACK unknown id\n");
-    Serial.print("[CMD] NACK unknown id: ");
-    Serial.println(id);
-    return;
-  }
-
-  int gestureIndex = id[0] - 'A';
+  // If explicit angles provided use them, otherwise fall back to gesture table lookup
   int angles[5];
-  for (int i = 0; i < 5; i++) {
-    angles[i] = constrain(GESTURE_TABLE[gestureIndex][i], 0, 180);
+  if (hasAngles) {
+    for (int i = 0; i < 5; i++) {
+      angles[i] = constrain(parsedAngles[i], 0, 180);
+    }
+  } else {
+    if (id.length() != 1 || id[0] < 'A' || id[0] > 'Z') {
+      sendWiFiResponse("NACK unknown id\n");
+      Serial.print("[CMD] NACK unknown id: ");
+      Serial.println(id);
+      return;
+    }
+    int gestureIndex = id[0] - 'A';
+    for (int i = 0; i < 5; i++) {
+      angles[i] = constrain(GESTURE_TABLE[gestureIndex][i], 0, 180);
+    }
   }
 
   int stepDelay = 20 + (int)((1.0f - speed) * 30);

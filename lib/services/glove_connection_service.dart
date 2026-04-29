@@ -142,7 +142,7 @@ class GloveConnectionService {
   }
 
   Future<void> emergencyStop() async {
-    const String frame = '{"id":"STOP","speed":0}';
+    const String frame = '{"id":"STOP","speed":0,"angles":[0,0,0,0,0]}';
     final List<int> bytes = utf8.encode(frame);
     if (_mode == ConnectionMode.ble && _gestureChar != null) {
       await _gestureChar!.write(bytes);
