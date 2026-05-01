@@ -5,8 +5,10 @@
 #if defined(__has_include) && __has_include("arduino_secrets.h")
   #include "arduino_secrets.h"
 #else
-  #define SECRET_SSID "Khaled"
-  #define SECRET_PASS "10041972"
+  //#define SECRET_SSID "ETUDIANT"
+  #define SECRET_SSID "Globalnet"
+  //#define SECRET_PASS "#$et2022*$"
+  #define SECRET_PASS "havana12345"
 #endif
 
 const uint16_t SERVER_PORT = 8888;
@@ -26,7 +28,7 @@ const int GESTURE_TABLE[27][5] = {
   {  0,  0, 90, 90, 90 }, // D
   { 90, 90, 90, 90, 90 }, // E
   {  0,  0,  0, 90, 90 }, // F
-  {  0,  0,  0,  0,  0 }, // G
+  {  0,  0,  0, 45, 45 }, // G
   {  0,  0, 90, 90,  0 }, // H
   { 90, 90, 90, 90,  0 }, // I
   { 90, 90, 90, 45,  0 }, // J
@@ -62,7 +64,7 @@ void setup() {
   for (int i = 0; i < NUM_SERVOS; i++) {
     servos[i].attach(SERVO_PINS[i]);
     delay(100);          // small delay so each servo powers up cleanly
-    servos[i].write(90);
+    servos[i].write(0);
   }
   delay(1000);           // let all servos reach position before anything else
 
@@ -70,24 +72,27 @@ void setup() {
   Serial.print("Attempting to connect to SSID: ");
   WiFi.setHostname("adeva-glove");
   Serial.println(SECRET_SSID);
-  for (int i=0;i< 5;i++){
-  if (WiFi.begin(SECRET_SSID, SECRET_PASS) != WL_CONNECTED) {
+  WiFi.begin(SECRET_SSID, SECRET_PASS);
+  int wifiRetries = 20;
+  while (WiFi.status() != WL_CONNECTED && wifiRetries-- > 0) {
     Serial.print(".");
-    delay(500);
-  }}
-  // Debugging: Wait for a valid IP (The fix for 0.0.0.0)
-  if (WiFi.localIP() == IPAddress(0,0,0,0)) {
-    Serial.print(" ?");
-    Serial.println("\ncouldn't connect to WIFI!");
+    delay(1000);
   }
-  else{
 
-  server.begin();
-  
-  Serial.println("\nWiFi Connected!");
-  Serial.print("IP Address: ");
-  Serial.println(WiFi.localIP());
-  Serial.print("Connecting to WiFi ");
+  int ipRetries = 20;
+  while (WiFi.status() == WL_CONNECTED && WiFi.localIP() == IPAddress(0, 0, 0, 0) && ipRetries-- > 0) {
+    Serial.print("?");
+    delay(500);
+  }
+
+  if (WiFi.status() != WL_CONNECTED || WiFi.localIP() == IPAddress(0, 0, 0, 0)) {
+    Serial.println("\nCouldn't connect to WiFi!");
+  } else {
+    server.begin();
+    Serial.println("\nWiFi Connected!");
+    Serial.print("IP Address: ");
+    Serial.println(WiFi.localIP());
+    Serial.print("Connecting to WiFi ");
   }
   if (!BLE.begin()) {
     Serial.println("BLE init failed! Continuing without BLE.");
@@ -97,7 +102,7 @@ void setup() {
     gloveService.addCharacteristic(gloveCharacteristic);
     BLE.addService(gloveService);
     BLE.advertise();
-    Serial.println(" advertising as 'AdevaGlove'");
+    Serial.println("\nadvertising as 'AdevaGlove'");
   }
 
   lineBuffer.reserve(128);
@@ -234,7 +239,7 @@ void processLine(const String& line) {
 
 void moveToPose(const int angles[5], int stepDelayMs) {
   for (int i = 0; i < NUM_SERVOS; i++) {
-    servos[i].write(angles[i]);
+    servos[i].write(angles[i]*2);
   }
   // ✅ Increased delay to give servos enough time to physically reach position
   delay(800);
