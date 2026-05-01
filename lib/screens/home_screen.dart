@@ -45,6 +45,21 @@ class _HomeScreenState extends State<HomeScreen> {
 
     _initializeWebView();
     _loadLibrary();
+    _setupConnectionLossListener();
+  }
+
+  void _setupConnectionLossListener() {
+    _glove.connectionLossStream.listen((reason) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Connexion perdue: $reason'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    });
   }
 
   Future<void> _initializeWebView() async {

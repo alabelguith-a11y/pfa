@@ -24,6 +24,10 @@ class GloveConnectionService {
       StreamController<bool>.broadcast();
   Stream<bool> get connectionStream => _connectionController.stream;
 
+  final StreamController<String> _connectionLossController =
+      StreamController<String>.broadcast();
+  Stream<String> get connectionLossStream => _connectionLossController.stream;
+
   ConnectionMode get mode => _mode;
   bool get isConnected =>
       (_mode == ConnectionMode.ble && _bleDevice != null) ||
@@ -71,10 +75,24 @@ class GloveConnectionService {
       _bleDevice = device;
       _mode = ConnectionMode.ble;
       _connectionController.add(true);
+      // Monitor BLE disconnect
+      _monitorBleConnection();
     } catch (e) {
       _connectionController.add(false);
       rethrow;
     }
+  }
+
+  void _monitorBleConnection() {
+    _bleDevice?.connectionState.listen((state) {
+      if (state == BluetoothConnectionState.disconnected && _mode == ConnectionMode.ble) {
+        _bleDevice = null;
+        _gestureChar = null;
+        _mode = ConnectionMode.none;
+        _connectionController.add(false);
+        _connectionLossController.add('BLE connection lost');
+      }
+    });
   }
 
   Future<void> connectWifi() async {
@@ -83,9 +101,31 @@ class GloveConnectionService {
           timeout: const Duration(seconds: 5));
       _mode = ConnectionMode.wifi;
       _connectionController.add(true);
+      // Monitor WiFi socket close
+      _monitorWifiConnection();
     } catch (e) {
       _connectionController.add(false);
       rethrow;
+    }
+  }
+
+  void _monitorWifiConnection() {
+    if (_wifiSocket != null) {
+      _wifiSocket!.done.then((_) {
+        if (_mode == ConnectionMode.wifi) {
+          _wifiSocket = null;
+          _mode = ConnectionMode.none;
+          _connectionController.add(false);
+          _connectionLossController.add('WiFi connection lost');
+        }
+      }).catchError((_) {
+        if (_mode == ConnectionMode.wifi) {
+          _wifiSocket = null;
+          _mode = ConnectionMode.none;
+          _connectionController.add(false);
+          _connectionLossController.add('WiFi connection lost');
+        }
+      });
     }
   }
 
@@ -112,6 +152,14 @@ class GloveConnectionService {
         await _gestureChar!.write(bytes);
         return true;
       } catch (e) {
+        // Detect BLE write failure as potential loss
+        if (_mode == ConnectionMode.ble) {
+          _bleDevice = null;
+          _gestureChar = null;
+          _mode = ConnectionMode.none;
+          _connectionController.add(false);
+          _connectionLossController.add('BLE write failed');
+        }
         return false;
       }
     }
@@ -122,11 +170,18 @@ class GloveConnectionService {
         _wifiSocket!.add([0x0a]);
         return true;
       } catch (e) {
+        // Detect WiFi write failure as potential loss
+        if (_mode == ConnectionMode.wifi) {
+          _wifiSocket = null;
+          _mode = ConnectionMode.none;
+          _connectionController.add(false);
+          _connectionLossController.add('WiFi write failed');
+        }
         return false;
       }
     }
 
-    return true;
+    return false;
   }
 
   Future<void> sendSequence(
@@ -155,5 +210,6 @@ class GloveConnectionService {
 
   void dispose() {
     _connectionController.close();
+    _connectionLossController.close();
   }
 }
