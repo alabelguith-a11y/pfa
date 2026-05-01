@@ -233,7 +233,7 @@ void processLine(const String& line) {
 
 void moveToPose(const int angles[5], int stepDelayMs) {
   for (int i = 0; i < NUM_SERVOS; i++) {
-    servos[i].write(angles[i]);
+    servos[i].write(angles[i]*2);
   }
   // ✅ Increased delay to give servos enough time to physically reach position
   delay(800);
